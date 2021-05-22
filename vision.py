@@ -6,32 +6,32 @@ import os
 
 # path = 'templates'
 # orb = cv2.ORB_create(nfeatures=1000)
-
+#
 # images = []
 # classNames = []
 # listaTmp = os.listdir(path)
-
+#
 # for cl in listaTmp:
 #     imgCur = cv2.imread(f'{path}/{cl}',0)
 #     _, imgCur = cv2.threshold(imgCur,120,255,cv2.THRESH_BINARY)
 #     images.append(imgCur)
 #     classNames.append(os.path.splitext(cl)[0])
-
-
-
+#
+#
+#
 # def findDes(images):
 #     desList = []
 #     for img in images:
 #         kp, des = orb.detectAndCompute(img,None)
 #         desList.append(des)
 #     return desList
-
+#
 # def findID(img, desList):
 #     kp2, des2 = orb.detectAndCompute(img,None)
 #     bf = cv2.BFMatcher()
 #     matchList = []
 #     finVal = -1
-#     thres = 2
+#     thres = 3
 #     for des in desList:
 #         matches = bf.knnMatch(des,des2,k=2)
 #         good = []
@@ -39,7 +39,7 @@ import os
 #             if m.distance < 0.75 * n.distance:
 #                 good.append([m])
 #         matchList.append(len(good))
-
+#
 #     if len(matchList)!= 0:
 #         if max(matchList) > thres:
 #             finVal = matchList.index(max(matchList))
@@ -65,53 +65,73 @@ while True:
 
     gray1 = cv2.cvtColor(orig_frame, cv2.COLOR_BGR2GRAY)
     h,w = gray1.shape[:2]
-    #Trojkat
+    #Trojkat obejmujacy tylko droge
     trojkat1 = [(w/6, h - h/4.5),(w / 2.4, h / 2),(w-w/4, h-h/4.5)]
     mask = np.zeros_like(gray1)
     cv2.fillPoly(mask,np.array([trojkat1], np.int32), 255)
     gray1 = cv2.bitwise_and(gray1, mask)
 
-    img_thr2 = cv2.adaptiveThreshold(gray1,255,
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY,71,-20)
-
-    # Proba wykrywania znaku za pomoca cech ORB
-
+    # img_thr2 = cv2.adaptiveThreshold(gray1,255,
+    #         cv2.ADAPTIVE_THRESH_MEAN_C,
+    #         cv2.THRESH_BINARY,71,-20)
+    #
+    # # Proba wykrywania znaku za pomoca cech ORB
+    #
     # trojkat2 = [(w/3, h - h/4),(w / 2.4, h / 2),(w-w/2.5, h-h/4)]
     # mask2 = np.zeros_like(gray1)
     # cv2.fillPoly(mask2,np.array([trojkat2], np.int32), 255)
-    # img_thr2 = cv2.bitwise_and(img_thr2, mask2)
+    # gray11 = cv2.bitwise_and(gray1, mask2)
     # desList = findDes(images)
-    # id = findID(img_thr2,desList)
-
+    # id = findID(gray11,desList)
+    #
     # if id != -1:
     #     cv2.putText(orig_frame,classNames[id],(50,50),cv2.FONT_HERSHEY_COMPLEX,1,(0,0,255),1,cv2.LINE_AA)
 
+    # Rozpoznawanie znaków na drodze
 
+    # progt = cv2.adaptiveThreshold(tmp,255,
+    #         cv2.ADAPTIVE_THRESH_MEAN_C,
+    #         cv2.THRESH_BINARY,71,-20)
+    # progs = cv2.adaptiveThreshold(gray1, 255,
+    #           cv2.ADAPTIVE_THRESH_MEAN_C,
+    #           cv2.THRESH_BINARY, 71, -20)
 
-    #Rozpoznawanie znaków na drodze
+    progt = cv2.Canny(tmp, 50, 180)
+    progs = cv2.Canny(gray1, 50, 180)
+    trojkat2 = [(w / 3, h - h / 4), (w / 2.4, h / 2), (w - w / 2.5, h - h / 4)]
+    mask2 = np.zeros_like(gray1)
+    cv2.fillPoly(mask2, np.array([trojkat2], np.int32), 255)
+    edges1 = cv2.bitwise_and(progs, mask2)
 
-    _, progt = cv2.threshold(tmp,120,255,cv2.THRESH_BINARY)
-    _, progs = cv2.threshold(gray1,135,255,cv2.THRESH_BINARY)
+    # Canny(50,180) i próg 0.14 działa ok
 
-    match = cv2.matchTemplate(progs, progt, cv2.TM_CCOEFF_NORMED)
+    # progs = cv2.Canny(gray1, 50, 180)
+
+    # _, progt = cv2.threshold(tmp,120,255,cv2.THRESH_BINARY)
+    # _, progs = cv2.threshold(gray1,135,255,cv2.THRESH_BINARY)
+
+    match = cv2.matchTemplate(edges1, progt, cv2.TM_CCOEFF_NORMED)
     # 0.32 dziala spoko
-    loc = np.where(match >= 0.35)
+    loc = np.where(match >= 0.14)
     for pt in zip(*loc[::-1]):
-        cv2.rectangle(orig_frame, pt, (pt[0] + szerokosc, pt[1] + wysokosc), (0,0,255), 3)
-        cv2.putText(orig_frame,"Znaczek 50 na godz",(50,50),cv2.FONT_HERSHEY_COMPLEX,1,(0,0,255),1,cv2.LINE_AA)
+        cv2.rectangle(orig_frame, pt, (pt[0] + szerokosc, pt[1] + wysokosc), (0, 0, 255), 3)
+        x, y, w, h = cv2.selectROI(orig_frame)
+        cv2.putText(orig_frame, "Znaczek 50 na godz", (50, 50), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 255), 1, cv2.LINE_AA)
+        break
 
-    _, thresh = cv2.threshold(gray,120,255,cv2.THRESH_BINARY)
 
-    thresh = cv2.adaptiveThreshold(gray,255,
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY,71,-20)
+
+    # _, thresh = cv2.threshold(gray,120,255,cv2.THRESH_BINARY)
+
+    # thresh = cv2.adaptiveThreshold(gray,255,
+    #         cv2.ADAPTIVE_THRESH_MEAN_C,
+    #         cv2.THRESH_BINARY,71,-20)
 
     edges = cv2.Canny(gray, 50, 180)
     
-    
-    #Prostokat
-    
+
+    #Prostokat maskujący
+
     # maska = np.zeros(edges.shape[:2], np.uint8)
     # maska[380:h-150, 300:w-300] = 255
     # edges[maska!=255] = 0
@@ -121,7 +141,10 @@ while True:
     mask = np.zeros_like(edges)
     cv2.fillPoly(mask,np.array([trojkat], np.int32), 255)
     edges = cv2.bitwise_and(edges, mask)
-    
+
+
+
+
 
     # Detekcja linii bocznych ulicy
     # lines = cv2.HoughLinesP(edges,
@@ -133,7 +156,7 @@ while True:
     lines = cv2.HoughLinesP(edges,
                     2,
                     np.pi/180,
-                    170,
+                    160,
                     np.array([]),
                     minLineLength = 70,
                     maxLineGap = 40)
@@ -173,8 +196,3 @@ while True:
         break
 video.release()
 cv2.destroyAllWindows()
-
-
-
-
-
