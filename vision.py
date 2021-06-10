@@ -48,6 +48,7 @@ import os
 # ------------------------------------------------------------------------------------------
 
 video = cv2.VideoCapture("duzo_znakow.mp4")
+# video = cv2.VideoCapture("cut_vid.mp4")
 tmp = cv2.imread("znaczek40.jpg",0)
 wysokosc, szerokosc = tmp.shape[:2]
 
@@ -105,7 +106,7 @@ while True:
 
     # Canny(50,180) i próg 0.14 działa ok
 
-    progs = cv2.Canny(gray, 50, 180)
+    progs = cv2.Canny(gray, 30, 180)
     progt = cv2.Canny(tmp, 50, 180)
     progs = cv2.bitwise_and(progs, mask2)
     # kernel = np.ones((3,3), np.uint8)
@@ -119,13 +120,13 @@ while True:
     # print(match)
     # 0.14 dziala spoko dla cannego
     #
+    znak = 0
     loc = np.where(match >= 0.135)
     for pt in zip(*loc[::-1]):
         cv2.rectangle(orig_frame, pt, (pt[0] + szerokosc, pt[1] + wysokosc), (0, 0, 255), 3)
-        cv2.waitKey(5)
-        cv2.putText(orig_frame, "Znaczek 40 mph", (50, 50), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(orig_frame, "Znaczek 40 mph", (300, 50), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 255), 1, cv2.LINE_AA)
+        znak = 1
         break
-
 
 
     # _, thresh = cv2.threshold(gray,120,255,cv2.THRESH_BINARY)
@@ -134,14 +135,13 @@ while True:
     #         cv2.ADAPTIVE_THRESH_MEAN_C,
     #         cv2.THRESH_BINARY,71,-20)
 
-    edges = cv2.Canny(gray, 80, 160)
-    
-
     #Prostokat maskujący
 
     # maska = np.zeros(edges.shape[:2], np.uint8)
     # maska[380:h-150, 300:w-300] = 255
     # edges[maska!=255] = 0
+    edges = cv2.Canny(gray, 50, 180)
+
     h,w = edges.shape[:2]
     #Trojkat
     trojkat = [(w/6, h - h/4.5),(w / 2.4, h / 2),(w-w/4, h-h/4.5)]
@@ -155,11 +155,11 @@ while True:
 
     lines = cv2.HoughLinesP(edges,
                     1,
-                    np.pi/180,
-                    60,
+                    np.pi/90,
+                    40,
                     np.array([]),
-                    minLineLength = 30,
-                    maxLineGap = 60)
+                    minLineLength = 40,
+                    maxLineGap = 40)
 
 
 
@@ -179,52 +179,51 @@ while True:
     # kernel = np.ones((5,5),np.uint8)
     # opening = cv2.morphologyEx(progP, cv2.MORPH_ERODE, kernel)
     # edges_persp = cv2.Canny(opening,50,180)
-    amountLeft = 000000000.1
-    amountRight = 000000000.1
-    slopeLeft = 000000000.1
-    slopeRight = 000000000.1
-    intLeft = 0
-    intRight = 0
+    slopeLeft = []
+    slopeRight = []
+    intLeft = []
+    intRight = []
 
     if lines is not None:
         for line in lines:
             x1, y1, x2, y2 = line[0]
-            slope = (y2 - y1) / (x2 - x1)
-            if math.fabs(slope) > 0.4:
-                if (x1 > w/3 and x2 > w/3):
-                    amountRight +=1
-                    slopeRight += (y2 - y1) / (x2 - x1)
-                    intRight += y2 - ((y2 - y1) / (x2 - x1))*x2
+            # slope = (y2 - y1) / (x2 - x1)
+            prosta = np.polyfit((x1, x2), (y1, y2), 1)
+            if math.fabs(prosta[0]) > 0.2:
+                if (x1 > w/2.7 and x2 > w/2.7):
+                    slopeRight.append(prosta[0])
+                    intRight.append(prosta[1])
                     # cv2.line(orig_frame, (x1, y1), (x2, y2), (0, 255, 0), 4)
 
-                elif (x1 < w/3 and x2 < w/3):
-                    amountLeft += 1
-                    slopeLeft += (y2 - y1) / (x2 - x1)
-                    intLeft += y2 - ((y2 - y1) / (x2 - x1))*x2
+                elif (x1 < w/2.7 and x2 < w/2.7):
+                    slopeLeft.append(prosta[0])
+                    intLeft.append(prosta[1])
                     # cv2.line(orig_frame, (x1, y1), (x2, y2), (0, 255, 0), 4)
 
-    if amountRight < 1 and amountLeft < 1:
+    if len(slopeLeft) < 1 or len(slopeRight) < 1:
         cv2.putText(orig_frame, "Nie wykryto zadnych krawedzi !", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 2,
                     (0, 0, 255), 1,
                     cv2.LINE_AA)
-
-    else:
+    elif len(slopeLeft) >= 1 and len(slopeRight) >= 1:
         # Linia prawa
         y1 = np.int32(h - h / 5)
         y2 = np.int32(y1 * 7 / 10)
         x1 = np.int32(w - w / 2.5)
-        x2 = np.int32((y2 - (intRight / amountRight)) / (slopeRight / amountRight))
+        x2 = np.int32((y2 - np.average(intRight)) / np.average(slopeRight) )
         cv2.line(orig_frame, (x1, y1), (x2, y2), (0, 255, 0), 4)
+
         # Linia lewa
         y1 = np.int32(h - h / 5)
         y2 = np.int32(y1 * 7 / 10)
         x1 = np.int32(w / 5)
-        x2 = np.int32((y2 - (intLeft / amountLeft)) / (slopeLeft / amountLeft))
+        x2 = np.int32((y2 - np.average(intLeft)) / np.average(slopeLeft))
         cv2.line(orig_frame, (x1, y1), (x2, y2), (0, 255, 0), 4)
 
     #v = np.hstack((gray,edges))
     cv2.imshow("frame", orig_frame)
-    cv2.imshow("edges", edges)
+    if znak == 1:
+        cv2.waitKey(4000)
+    cv2.imshow("edges", gray)
 
     key = cv2.waitKey(1)
     if key == 27:
